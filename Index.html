@@ -1,429 +1,207 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPS Coordinates Heatmap</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>GPS Heatmap with Esri Topographic Base</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+    
+    <!-- Leaflet Heatmap Plugin CSS -->
     <style>
-        body {
-            margin: 0;
-            padding: 0;
-            font-family: Arial, sans-serif;
-            background: #1a1a1a;
-            color: white;
-        }
-        .container {
-            display: flex;
+        #map {
             height: 100vh;
-        }
-        #map-container {
-            position: relative;
-            width: 80%;
-            height: 100vh;
-            background: #2a2a2a;
-            overflow: hidden;
-        }
-        #map-svg {
             width: 100%;
-            height: 100%;
-            background: radial-gradient(circle at 50% 50%, #3a4a3a 0%, #1a2a1a 100%);
         }
-        .sidebar {
-            width: 20%;
-            background: #1a1a1a;
-            padding: 20px;
-            box-sizing: border-box;
-            overflow-y: auto;
-        }
-        .legend {
-            background: rgba(0, 0, 0, 0.8);
-            padding: 15px;
-            border-radius: 8px;
-            border: 2px solid #00ff00;
-            margin-bottom: 20px;
-        }
-        .legend h3 {
-            margin: 0 0 10px 0;
-            color: #00ff00;
-        }
-        .legend-item {
-            display: flex;
-            align-items: center;
-            margin: 5px 0;
-        }
-        .legend-color {
-            width: 20px;
-            height: 20px;
-            margin-right: 10px;
-            border-radius: 3px;
-        }
-        .coordinates-list {
-            margin-top: 20px;
-        }
-        .coordinates-list h3 {
-            color: #00ff00;
-            margin-bottom: 10px;
-        }
-        .coord-item {
-            background: rgba(255, 255, 255, 0.1);
-            padding: 8px;
-            margin: 5px 0;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: background 0.3s;
+        
+        .coordinate-popup {
+            font-family: Arial, sans-serif;
             font-size: 12px;
+            text-align: center;
         }
-        .coord-item:hover {
-            background: rgba(0, 255, 0, 0.2);
+        
+        .coordinate-popup strong {
+            color: #2c5aa0;
         }
-        .coord-item.active {
-            background: rgba(0, 255, 0, 0.3);
-            border: 1px solid #00ff00;
-        }
-        .tooltip {
+        
+        .info-panel {
             position: absolute;
-            background: rgba(0, 0, 0, 0.9);
-            color: #00ff00;
+            top: 10px;
+            right: 10px;
+            background: rgba(255, 255, 255, 0.9);
             padding: 10px;
             border-radius: 5px;
-            font-weight: bold;
-            border: 2px solid #00ff00;
-            box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
-            pointer-events: none;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
             z-index: 1000;
-            display: none;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
         }
-        .instructions {
-            background: rgba(0, 0, 0, 0.8);
-            padding: 15px;
-            border-radius: 8px;
-            border: 2px solid #00ff00;
-            margin-bottom: 20px;
+        
+        .legend {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            z-index: 1000;
+            font-family: Arial, sans-serif;
+            font-size: 12px;
         }
-        .instructions h3 {
-            color: #00ff00;
-            margin: 0 0 10px 0;
-        }
-        .github-note {
-            background: rgba(255, 165, 0, 0.2);
-            padding: 15px;
-            border-radius: 8px;
-            border: 2px solid #ffa500;
-            margin-bottom: 20px;
-        }
-        .github-note h3 {
-            color: #ffa500;
-            margin: 0 0 10px 0;
+        
+        .legend-gradient {
+            width: 100px;
+            height: 10px;
+            background: linear-gradient(to right, blue, cyan, lime, yellow, red);
+            margin: 5px 0;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div id="map-container">
-            <svg id="map-svg"></svg>
-            <div class="tooltip" id="tooltip"></div>
-        </div>
-        
-        <div class="sidebar">
-            <div class="github-note">
-                <h3>GitHub Pages Compatible</h3>
-                <p>This version works on GitHub Pages without external dependencies. Upload this HTML file to your GitHub repository and enable GitHub Pages.</p>
-            </div>
-            
-            <div class="instructions">
-                <h3>Instructions</h3>
-                <p>• Click on any point to see coordinates</p>
-                <p>• Hover over points for preview</p>
-                <p>• Click coordinates in list to highlight point</p>
-            </div>
-            
-            <div class="legend">
-                <h3>Heat Intensity</h3>
-                <div class="legend-item">
-                    <div class="legend-color" style="background: #ff0000;"></div>
-                    <span>High (5+ nearby)</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color" style="background: #ff6600;"></div>
-                    <span>Medium-High (4)</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color" style="background: #ffff00;"></div>
-                    <span>Medium (3)</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color" style="background: #00ff00;"></div>
-                    <span>Low-Medium (2)</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color" style="background: #0000ff;"></div>
-                    <span>Low (1)</span>
-                </div>
-            </div>
-            
-            <div class="coordinates-list">
-                <h3>GPS Coordinates</h3>
-                <div id="coord-list"></div>
-            </div>
+    <div id="map"></div>
+    
+    <div class="info-panel">
+        <strong>GPS Heatmap</strong><br>
+        Points: <span id="point-count">0</span><br>
+        Click markers for coordinates
+    </div>
+    
+    <div class="legend">
+        <strong>Heat Intensity</strong>
+        <div class="legend-gradient"></div>
+        <div style="display: flex; justify-content: space-between;">
+            <span>Low</span>
+            <span>High</span>
         </div>
     </div>
 
+    <!-- Leaflet JavaScript -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    
+    <!-- Leaflet Heatmap Plugin -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
+
     <script>
         // GPS coordinates data
-        const coordinatesData = [
-            [35.21267, -111.93149], [35.14485, -112.02426], [35.22079, -112.10837],
-            [35.13841, -112.02401], [35.16546, -112.00977], [35.19532, -112.19430],
-            [35.22215, -112.10242], [35.22992, -112.21122], [35.23918, -112.20344],
-            [34.89179, -112.09472], [35.21230, -112.13483], [35.11515, -112.01877],
-            [35.21293, -112.11941], [35.21065, -112.12123], [35.20875, -112.12339],
-            [35.21717, -112.11553], [34.88239, -112.09353], [35.1942, -112.19916],
-            [35.1997, -112.18812], [35.20417, -112.18255], [35.20515, -112.21859],
-            [35.24131, -112.21086], [35.2392, -112.20717], [35.09272, -112.04421],
-            [35.07842, -112.02863], [35.23641, -111.94423], [35.24599, -111.92451],
-            [35.24764, -111.94771], [35.22088, -112.22806], [35.22632, -112.19293],
-            [35.22538, -112.19566], [35.21931, -112.1977], [35.2301, -112.20358],
-            [35.20913, -112.17857], [35.20738, -112.16338], [35.20436, -112.16535],
-            [35.2153, -112.1766], [35.20885, -112.18089], [35.21993, -112.16226],
-            [35.20983, -112.15832], [35.20619, -112.17042], [35.18927, -112.27756],
-            [35.11068, -112.22932], [35.1128, -112.22976], [35.1126, -112.23587],
-            [35.08727, -112.21848], [35.08484, -112.21451], [35.12725, -112.20257],
+        const coordinates = [
+            [35.21267, -111.93149],
+            [35.14485, -112.02426],
+            [35.22079, -112.10837],
+            [35.13841, -112.02401],
+            [35.16546, -112.00977],
+            [35.19532, -112.19430],
+            [35.22215, -112.10242],
+            [35.22992, -112.21122],
+            [35.23918, -112.20344],
+            [34.89179, -112.09472],
+            [35.21230, -112.13483],
+            [35.11515, -112.01877],
+            [35.21293, -112.11941],
+            [35.21065, -112.12123],
+            [35.20875, -112.12339],
+            [35.21717, -112.11553],
+            [34.88239, -112.09353],
+            [35.1942, -112.19916],
+            [35.1997, -112.18812],
+            [35.20417, -112.18255],
+            [35.20515, -112.21859],
+            [35.24131, -112.21086],
+            [35.2392, -112.20717],
+            [35.09272, -112.04421],
+            [35.07842, -112.02863],
+            [35.23641, -111.94423],
+            [35.24599, -111.92451],
+            [35.24764, -111.94771],
+            [35.22088, -112.22806],
+            [35.22632, -112.19293],
+            [35.22538, -112.19566],
+            [35.21931, -112.1977],
+            [35.2301, -112.20358],
+            [35.20913, -112.17857],
+            [35.20738, -112.16338],
+            [35.20436, -112.16535],
+            [35.2153, -112.1766],
+            [35.20885, -112.18089],
+            [35.21993, -112.16226],
+            [35.20983, -112.15832],
+            [35.20619, -112.17042],
+            [35.18927, -112.27756],
+            [35.11068, -112.22932],
+            [35.1128, -112.22976],
+            [35.1126, -112.23587],
+            [35.08727, -112.21848],
+            [35.08484, -112.21451],
+            [35.12725, -112.20257],
             [35.19933, -112.01341]
         ];
 
-        // Calculate bounds
-        const lats = coordinatesData.map(coord => coord[0]);
-        const lngs = coordinatesData.map(coord => coord[1]);
-        const bounds = {
-            minLat: Math.min(...lats),
-            maxLat: Math.max(...lats),
-            minLng: Math.min(...lngs),
-            maxLng: Math.max(...lngs)
+        // Initialize the map
+        const map = L.map('map').setView([35.18, -112.12], 10);
+
+        // Add Esri World Topographic Map
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
+            attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ, TomTom, Intermap, iPC, USGS, FAO, NPS, NRCAN, GeoBase, Kadaster NL, Ordnance Survey, Esri Japan, METI, Esri China (Hong Kong), and the GIS User Community',
+            maxZoom: 18
+        }).addTo(map);
+
+        // Prepare data for heatmap (lat, lng, intensity)
+        const heatData = coordinates.map(coord => [coord[0], coord[1], 0.8]);
+
+        // Create heatmap layer
+        const heatmapLayer = L.heatLayer(heatData, {
+            radius: 25,
+            blur: 15,
+            maxZoom: 17,
+            gradient: {
+                0.0: 'blue',
+                0.2: 'cyan',
+                0.4: 'lime',
+                0.6: 'yellow',
+                0.8: 'orange',
+                1.0: 'red'
+            }
+        }).addTo(map);
+
+        // Add clickable markers for each coordinate
+        coordinates.forEach((coord, index) => {
+            const marker = L.circleMarker([coord[0], coord[1]], {
+                radius: 6,
+                fillColor: '#ff7800',
+                color: '#000',
+                weight: 1,
+                opacity: 0.8,
+                fillOpacity: 0.6
+            }).addTo(map);
+
+            // Add popup with coordinates
+            marker.bindPopup(`
+                <div class="coordinate-popup">
+                    <strong>GPS Coordinates</strong><br>
+                    <strong>Latitude:</strong> ${coord[0].toFixed(6)}<br>
+                    <strong>Longitude:</strong> ${coord[1].toFixed(6)}<br>
+                    <strong>Point:</strong> ${index + 1} of ${coordinates.length}
+                </div>
+            `);
+        });
+
+        // Update point count
+        document.getElementById('point-count').textContent = coordinates.length;
+
+        // Add layer control
+        const overlayMaps = {
+            "Heatmap": heatmapLayer
         };
 
-        // Add padding
-        const latPadding = (bounds.maxLat - bounds.minLat) * 0.1;
-        const lngPadding = (bounds.maxLng - bounds.minLng) * 0.1;
-        bounds.minLat -= latPadding;
-        bounds.maxLat += latPadding;
-        bounds.minLng -= lngPadding;
-        bounds.maxLng += lngPadding;
+        L.control.layers(null, overlayMaps).addTo(map);
 
-        // Get SVG dimensions
-        const svg = document.getElementById('map-svg');
-        const svgRect = svg.getBoundingClientRect();
-        const width = svgRect.width;
-        const height = svgRect.height;
+        // Add scale control
+        L.control.scale().addTo(map);
 
-        // Projection functions
-        function projectLat(lat) {
-            return height - ((lat - bounds.minLat) / (bounds.maxLat - bounds.minLat)) * height;
-        }
-
-        function projectLng(lng) {
-            return ((lng - bounds.minLng) / (bounds.maxLng - bounds.minLng)) * width;
-        }
-
-        // Calculate density for each point
-        const densityMap = new Map();
-        const radius = 0.02;
-
-        coordinatesData.forEach((coord, index) => {
-            let density = 0;
-            coordinatesData.forEach(otherCoord => {
-                const distance = Math.sqrt(
-                    Math.pow(coord[0] - otherCoord[0], 2) + 
-                    Math.pow(coord[1] - otherCoord[1], 2)
-                );
-                if (distance <= radius) {
-                    density++;
-                }
-            });
-            densityMap.set(index, density);
-        });
-
-        const maxDensity = Math.max(...densityMap.values());
-
-        // Create SVG elements
-        function createHeatmap() {
-            svg.innerHTML = '';
-            
-            // Add grid lines for reference
-            const gridGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-            gridGroup.setAttribute('opacity', '0.2');
-            
-            // Vertical lines
-            for (let i = 0; i <= 10; i++) {
-                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-                line.setAttribute('x1', (width / 10) * i);
-                line.setAttribute('y1', 0);
-                line.setAttribute('x2', (width / 10) * i);
-                line.setAttribute('y2', height);
-                line.setAttribute('stroke', '#444');
-                line.setAttribute('stroke-width', '1');
-                gridGroup.appendChild(line);
-            }
-            
-            // Horizontal lines
-            for (let i = 0; i <= 10; i++) {
-                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-                line.setAttribute('x1', 0);
-                line.setAttribute('y1', (height / 10) * i);
-                line.setAttribute('x2', width);
-                line.setAttribute('y2', (height / 10) * i);
-                line.setAttribute('stroke', '#444');
-                line.setAttribute('stroke-width', '1');
-                gridGroup.appendChild(line);
-            }
-            
-            svg.appendChild(gridGroup);
-
-            // Create markers
-            coordinatesData.forEach((coord, index) => {
-                const density = densityMap.get(index);
-                const intensity = density / maxDensity;
-                
-                // Color based on density
-                let color;
-                if (intensity <= 0.2) color = '#0000ff';
-                else if (intensity <= 0.4) color = '#00ff00';
-                else if (intensity <= 0.6) color = '#ffff00';
-                else if (intensity <= 0.8) color = '#ff6600';
-                else color = '#ff0000';
-
-                const x = projectLng(coord[1]);
-                const y = projectLat(coord[0]);
-                const radius = 5 + (intensity * 8);
-
-                // Create glow effect
-                const glow = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-                glow.setAttribute('cx', x);
-                glow.setAttribute('cy', y);
-                glow.setAttribute('r', radius + 3);
-                glow.setAttribute('fill', color);
-                glow.setAttribute('opacity', '0.3');
-                svg.appendChild(glow);
-
-                // Create main circle
-                const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-                circle.setAttribute('cx', x);
-                circle.setAttribute('cy', y);
-                circle.setAttribute('r', radius);
-                circle.setAttribute('fill', color);
-                circle.setAttribute('opacity', '0.8');
-                circle.setAttribute('stroke', color);
-                circle.setAttribute('stroke-width', '2');
-                circle.setAttribute('cursor', 'pointer');
-                circle.setAttribute('data-index', index);
-                
-                svg.appendChild(circle);
-
-                // Add event listeners
-                circle.addEventListener('click', function() {
-                    showTooltip(coord, density, x, y, true);
-                    highlightCoordinate(index);
-                });
-
-                circle.addEventListener('mouseenter', function() {
-                    circle.setAttribute('opacity', '1');
-                    circle.setAttribute('stroke-width', '3');
-                    showTooltip(coord, density, x, y, false);
-                });
-
-                circle.addEventListener('mouseleave', function() {
-                    circle.setAttribute('opacity', '0.8');
-                    circle.setAttribute('stroke-width', '2');
-                    hideTooltip();
-                });
-            });
-        }
-
-        // Tooltip functions
-        function showTooltip(coord, density, x, y, persistent) {
-            const tooltip = document.getElementById('tooltip');
-            const lat = coord[0].toFixed(6);
-            const lng = coord[1].toFixed(6);
-            
-            tooltip.innerHTML = `
-                <strong>GPS Coordinates:</strong><br>
-                Latitude: ${lat}<br>
-                Longitude: ${lng}<br>
-                Density: ${density} points
-            `;
-            
-            tooltip.style.left = (x + 10) + 'px';
-            tooltip.style.top = (y - 60) + 'px';
-            tooltip.style.display = 'block';
-            
-            if (persistent) {
-                tooltip.style.backgroundColor = 'rgba(0, 0, 0, 0.95)';
-                setTimeout(() => {
-                    tooltip.style.display = 'none';
-                }, 3000);
-            }
-        }
-
-        function hideTooltip() {
-            const tooltip = document.getElementById('tooltip');
-            tooltip.style.display = 'none';
-        }
-
-        // Create coordinate list
-        function createCoordinateList() {
-            const listContainer = document.getElementById('coord-list');
-            
-            coordinatesData.forEach((coord, index) => {
-                const density = densityMap.get(index);
-                const item = document.createElement('div');
-                item.className = 'coord-item';
-                item.setAttribute('data-index', index);
-                
-                item.innerHTML = `
-                    <strong>#${index + 1}</strong><br>
-                    ${coord[0].toFixed(6)}, ${coord[1].toFixed(6)}<br>
-                    <small>Density: ${density}</small>
-                `;
-                
-                item.addEventListener('click', function() {
-                    highlightCoordinate(index);
-                    const circle = svg.querySelector(`circle[data-index="${index}"]`);
-                    if (circle) {
-                        const x = parseFloat(circle.getAttribute('cx'));
-                        const y = parseFloat(circle.getAttribute('cy'));
-                        showTooltip(coord, density, x, y, true);
-                    }
-                });
-                
-                listContainer.appendChild(item);
-            });
-        }
-
-        function highlightCoordinate(index) {
-            // Remove previous highlights
-            document.querySelectorAll('.coord-item').forEach(item => {
-                item.classList.remove('active');
-            });
-            
-            // Add highlight to selected item
-            const item = document.querySelector(`.coord-item[data-index="${index}"]`);
-            if (item) {
-                item.classList.add('active');
-                item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            }
-        }
-
-        // Initialize
-        function init() {
-            createHeatmap();
-            createCoordinateList();
-        }
-
-        // Handle window resize
-        window.addEventListener('resize', function() {
-            setTimeout(init, 100);
-        });
-
-        // Initialize when page loads
-        window.addEventListener('load', init);
+        // Fit map to show all coordinates
+        const group = new L.featureGroup(coordinates.map(coord => L.marker([coord[0], coord[1]])));
+        map.fitBounds(group.getBounds().pad(0.1));
     </script>
 </body>
 </html>
